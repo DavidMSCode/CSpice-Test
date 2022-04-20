@@ -1,0 +1,7 @@
+build/*
+.vscode
+de440.bsp
+naif0012.tls
+*.exe
+*.out
+*.app
