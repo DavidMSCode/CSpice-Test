@@ -25,8 +25,8 @@ using namespace std;
 void main(int argc, char* argv[]){
     //default values
     int N = 1000;
-    int num_parallel_runs = 100;
-    int max_threads = 4;
+    int num_runs = 2;
+    int max_threads = 2;
 
     //Parse input to replace default values
     switch(argc) {
@@ -37,50 +37,69 @@ void main(int argc, char* argv[]){
         case 3:
             //Specify number of reads per run and num of parallel runs
             N = atoi(argv[1]);
-            num_parallel_runs = atoi(argv[2]);
+            num_runs = atoi(argv[2]);
             break;
         case 4:
             //Specify number of reads per run and num of parallel runs
             N = atoi(argv[1]);
-            num_parallel_runs = atoi(argv[2]);
+            num_runs = atoi(argv[2]);
             max_threads = atoi(argv[3]);
             break;
         default:
             //use default values
             break;
     }
-    cout << "Running with " + to_string(N) + " SPICE reads per run, " + to_string(num_parallel_runs) + " parallel runs and " + to_string(max_threads) + " CPU threads\n";
+    cout << "Running with " + to_string(N) + " SPICE reads per run, " + to_string(num_runs) + " parallel runs and " + to_string(max_threads) + " CPU threads\n";
 
-    serialRun(N);
+
+    serialRun(int(N/2), num_runs);          //dividing N by 2 because the read function reads for moon and sun
+
+    parallelRun(int(N/2), num_runs, max_threads);
 }
 
-void serialRun(int N){
-    //runs in series a bunch of ephemeris data reads in series to confirm that CSPCISCE is working correctly
+void serialRun(int N, int num_runs){
+    //runs in series a bunch of ephemeris data read runs in series to confirm that CSPICE is working correctly
     cout << "Starting serial run\n";
-    double t0 = 0.0;
-    double tf = 1500;
     //Load Kernels
     furnsh_c("de440.bsp");
     furnsh_c("naif0012.tls");
-    //read data
-    vec3dDouble theData = readALotOfData(t0,tf, N);
+    for(int i=0;i<num_runs;i++){
+        //an arbitrary time interval
+        double t0 = 0.0;
+        double tf = 1500;
+        //read data
+        vec3dDouble theData = readALotOfData(t0,tf, N);
+    }
     //Unload Kernels
     kclear_c();
     cout << "Finished serial run\n";
 }
 
-void parallelRun(){
+void parallelRun(int N, int num_runs, int max_threads){
     //runs a bunch of parralel threads to encourage thread collisions 
-    cout << "Starting parallel run\n";
-
-    cout << "Ending parallel run \n";
+    cout << "Starting parallel runs\n";
+    omp_set_num_threads(max_threads);
+    #pragma omp parallel for shared(N)
+        for(int i=0; i<num_runs; i++){
+            furnsh_c("de440.bsp");
+            furnsh_c("naif0012.tls");
+            //an arbitrary time interval
+            double t0 = 0.0;
+            double tf = 1500;
+            //read data
+            vec3dDouble theData = readALotOfData(t0,tf,N);
+            kclear_c();
+        } 
+    cout << "Ending parallel runs\n";
 }
 
+
+//Function where majority of work occurs
 vec3dDouble readALotOfData(double t0, double tf, int N){
     //too lazy to add real arrays so this function returns a vector of vectors of vectors of doubles 2xNx3
     //reads a lot of positions for the sun and moon relative to the earth to simulate CSPICE usage
     int threadnum = omp_get_thread_num();
-    cout << "Starting data read on thread " + to_string(threadnum) + "\n";
+    //cout << "Starting data read on thread " + to_string(threadnum) + "\n";
     
     //create vector of times
     vector<double> times = linspace(t0,tf,N);
@@ -98,16 +117,17 @@ vec3dDouble readALotOfData(double t0, double tf, int N){
         //read moon position at time i
         double moonpos[3];
         double ltm;
-        spkpos_c("Moon",times[i],"J2000","LT+S","EARTH",moonpos, &ltm);
+        spkpos_c("MOOn",times[i],"J2000","LT+S","EARTH",moonpos, &ltm);
         vector<double> moonvec(begin(moonpos), end(moonpos));
         //store in vector
         moonList[i] = moonvec;
     }
     vec3dDouble output = {sunList,moonList};
-    cout << "Finished data read on thread " + to_string(threadnum) + "\n";
+    //cout << "Finished data read on thread " + to_string(threadnum) + "\n";
     return output;
 }
 
+//Utility functions
 vector<double> linspace(double a, double b, int N){
     //returns a vector of N evenly spaced doubles over the interval [a,b]
     vector<double> out(N);

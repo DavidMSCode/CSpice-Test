@@ -18,7 +18,9 @@ using vec3dDouble = std::vector<std::vector<std::vector<double> > >;
  * @brief Runs some spice functions on a single thread
  * 
  */
-void serialRun(int N);
+void serialRun(int N, int num_runs);
+
+void parallelRun(int N, int num_runs, int max_threads);
 
 vec3dDouble readALotOfData(double t0, double tf, int N);
 
